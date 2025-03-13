@@ -1,1 +1,3 @@
 # lms pi firmware
+
+Router --> pi --> switch --> PC1, PC2...
