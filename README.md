@@ -1,3 +1,5 @@
 # lms pi firmware
 
-Router --> pi --> switch --> PC1, PC2...
+This repository holds main firmware for network monitor written in pyhton.
+
+TBD

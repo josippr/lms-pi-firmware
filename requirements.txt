@@ -1,0 +1,7 @@
+speedtest-cli
+scapy
+dotenv
+requests
+schedule
+pyyaml
+psutil
