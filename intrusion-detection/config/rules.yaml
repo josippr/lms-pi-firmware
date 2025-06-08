@@ -1,0 +1,10 @@
+rules:
+  - name: Port Scan
+    type: port_scan
+    threshold: 50
+    time_window: 10  # seconds
+
+  - name: Suspicious DNS
+    type: dns_tunnel
+    min_length: 50
+    dot_count: 5

@@ -7,6 +7,7 @@ SCRIPTS = {
     # "network-scanner": "/network-scanner/scanner.py",
     # "network-speedtest": "/network-speedtest/speedtest.py",
     "node-metrics": "./node-metrics/send_metrics.py",
+    "intrusion-detection": "./intrusion-detection/intrusion.py",
 }
 
 # Run script (crash safe)
@@ -34,6 +35,7 @@ def main():
     # t2 = run_script(SCRIPTS["network-scanner"])
     # t3 = run_script(SCRIPTS["network-speedtest"])
     t4 = run_script(SCRIPTS["node-metrics"])
+    t5 = run_script(SCRIPTS["intrusion-detection"])
 
     try:
         # Main thread, run every 5 minutes
