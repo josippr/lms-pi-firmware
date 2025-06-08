@@ -59,7 +59,7 @@ def send_metrics():
     hw_data = collect_hardware_info()
     payload = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
-        "uid": config.get('uid', 'unknown'),
+        "uid": config.get('UID', 'unknown'),
         "hardware": hw_data
     }
 
