@@ -47,6 +47,7 @@ def collect_hardware_info():
             "disk_total_mb": round(psutil.disk_usage('/').total / 1024 / 1024, 2),
             "cpu_temperature_c": cpu_temp,
             "uptime_sec": int(time.time() - psutil.boot_time()),
+            "lastSync": int(time.time()),
         }
     except Exception as e:
         print(f"[ERROR] Collecting hardware info failed: {e}")
@@ -56,6 +57,7 @@ def send_metrics():
     print("[INFO] Started collecting metrics...")
     
     config = read_config(CONFIG_FILE)
+    print("debug: Loaded config: ", config)
     hw_data = collect_hardware_info()
     payload = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
