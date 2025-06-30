@@ -10,26 +10,42 @@ class RuleEngine:
         with open(config_path) as f:
             self.rules = yaml.safe_load(f)['rules']
         self.history = defaultdict(list)
+        self.last_alert_time = defaultdict(lambda: 0)
 
     def evaluate(self, metadata):
         now = time.time()
 
         for rule in self.rules:
-            # if rule['type'] == 'port_scan':
-            #     src = metadata['src_ip']
-            #     self.history[src].append((metadata.get('dst_port'), now))
-            #     self.history[src] = [
-            #         (p, t) for p, t in self.history[src] if now - t <= rule['time_window']
-            #     ]
-            #     unique_ports = {p for p, _ in self.history[src]}
-            #     if len(unique_ports) > rule['threshold']:
-            #         send_alert({
-            #             'type': rule['name'],
-            #             'method': 'High port volume',
-            #             'source': src,
-            #             'ports': list(unique_ports),
-            #             'timestamp': int(now)
-            #         })
+            if rule['type'] == 'port_scan':
+                # 6 = TCP, 17 = UDP
+                if metadata.get('protocol') not in (6, 17):  
+                    continue
+
+                src = metadata['src_ip']
+                dst = metadata['dst_ip']
+                dst_port = metadata.get('dst_port')
+                
+                if dst.startswith('127.'):
+                    continue 
+
+                protocol = metadata.get('protocol')
+                key = (dst, dst_port, protocol)
+                self.history[src].append((key, now))
+                self.history[src] = [(k, t) for k, t in self.history[src] if now - t <= rule['time_window']]
+
+                unique_targets = {(dst, port, proto) for (dst, port, proto), _ in self.history[src]}
+                if len(unique_targets) > rule['threshold']:
+                    last_alert = self.last_alert_time.get(src, 0)
+                    if now - last_alert > rule.get('alert_cooldown', 30):
+                        send_alert({
+                            'type': rule['name'],
+                            'method': 'High port volume',
+                            'source': src,
+                            'ports': [port for _, port, _ in unique_targets],
+                            'protocols': list({proto for _, _, proto in unique_targets}),
+                            'timestamp': int(now)
+                        })
+                        self.last_alert_time[src] = now
 
             if rule['type'] == 'dns_tunnel' and metadata.get('protocol') == 17:
                 query = metadata.get('dns_query', '')
@@ -40,41 +56,3 @@ class RuleEngine:
                         'source': metadata['src_ip'],
                         'timestamp': int(now)
                     })
-
-            # if rule['type'] == 'nmap_signature':
-            #     flags = metadata.get('tcp_flags', '')
-            #     ttl = metadata.get('ttl', 0)
-            #     window_size = metadata.get('window_size', 0)
-
-            #     suspicious_flags = ['S', 'FPU', 'SA', 'SF']  # SYN-only, Xmas scan, etc.
-            #     suspicious_ttl = ttl in [255, 128]
-            #     suspicious_window = window_size in [1024, 2048, 3072, 31337]
-
-            #     if flags in suspicious_flags or suspicious_ttl or suspicious_window:
-            #         send_alert({
-            #             'type': rule['name'],
-            #             'method': 'Suspicious TCP signature',
-            #             'source': metadata['src_ip'],
-            #             'dst_port': metadata.get('dst_port'),
-            #             'flags': flags,
-            #             'ttl': ttl,
-            #             'window_size': window_size,
-            #             'timestamp': int(now)
-            #         })
-
-            # if rule['type'] == 'slow_scan':
-            #     src = metadata['src_ip']
-            #     self.history[src].append((metadata.get('dst_port'), now))
-            #     # Keep last 5 minutes
-            #     self.history[src] = [
-            #         (p, t) for p, t in self.history[src] if now - t <= 300
-            #     ]
-            #     unique_ports = {p for p, _ in self.history[src]}
-            #     if len(unique_ports) > 10:  # low volume, long window
-            #         send_alert({
-            #             'type': rule['name'],
-            #             'method': 'Slow scan over time',
-            #             'source': src,
-            #             'ports': list(unique_ports),
-            #             'timestamp': int(now)
-            #         })

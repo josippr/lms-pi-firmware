@@ -10,6 +10,12 @@ def handle_packet(packet):
             'dst_ip': packet[IP].dst,
             'protocol': packet[IP].proto
         }
+
         if TCP in packet:
             metadata['dst_port'] = packet[TCP].dport
+        elif UDP in packet:
+            metadata['dst_port'] = packet[UDP].dport
+        else:
+            return  # not TCP or UDP
+
         rule_engine.evaluate(metadata)

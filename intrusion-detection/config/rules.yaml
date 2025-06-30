@@ -1,17 +1,11 @@
 rules:
   - name: Port Scan Detection
     type: port_scan
-    threshold: 2
-    time_window: 60
+    threshold: 20
+    time_window: 10
+    alert_cooldown: 30
 
   - name: DNS Tunnel Detection
     type: dns_tunnel
     min_length: 30
     dot_count: 4
-
-  - name: Nmap TCP Signature
-    type: nmap_signature
-
-  - name: Slow Port Scan
-    type: slow_scan
-
