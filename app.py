@@ -8,7 +8,8 @@ SCRIPTS = {
     # "network-speedtest": "/network-speedtest/speedtest.py",
     "node-metrics": "./node-metrics/send_metrics.py",
     "intrusion-detection": "./intrusion-detection/intrusion.py",
-    "fritzbox-plugin": "./fritzbox-plugin/fritzbox.py"
+    "fritzbox-plugin": "./fritzbox-plugin/fritzbox.py",
+    "network-status": "./network-status/network-status.py"
 }
 
 # Run script (crash safe)
@@ -38,6 +39,7 @@ def main():
     t4 = run_script(SCRIPTS["node-metrics"])
     t5 = run_script(SCRIPTS["intrusion-detection"])
     t6 = run_script(SCRIPTS["fritzbox-plugin"])
+    t7 = run_script(SCRIPTS["network-status"])
 
     try:
         # Main thread, run every 5 minutes
