@@ -16,7 +16,7 @@ def list_connected_devices(fritz_ip=FRITZ_IP, username=FRITZ_USERNAME, password=
         for index in range(devices):
             device_info = fc.call_action('Hosts', 'GetGenericHostEntry', NewIndex=index)
             active = device_info.get('NewActive', False)
-            if active:
+            # if active:
                 # print(f"\nDevice #{index+1}")
                 # print(f"  Name      : {device_info.get('NewHostName')}")
                 # print(f"  IP Address: {device_info.get('NewIPAddress')}")
