@@ -5,8 +5,9 @@ import yaml
 import requests
 from dotenv import load_dotenv
 from datetime import datetime
-from scapy.all import sniff, IP, TCP
-from collections import defaultdict
+from scapy.all import sniff, IP
+import subprocess
+import psutil
 
 # === Load environment variables ===
 load_dotenv()
@@ -31,19 +32,23 @@ def read_config(path):
 # === Global Stats ===
 stats = {
     "start_time": time.time(),
-    "bytes_total": 0,
     "packet_count": 0,
     "active_devices": set(),
-    "rtts": [],
-    "retransmissions": 0,
-    "out_of_order": 0,
-    "jitter_values": []
 }
 
-# === Flow Trackers ===
-syn_times = {}  # key: (src, dst, dport)
-tcp_seq_map = defaultdict(int)
-last_arrival_times = {}
+# === Utility: Ping Latency and Jitter ===
+def ping_latency_jitter(target="192.168.178.1", count=10):
+    try:
+        output = subprocess.check_output(["ping", "-c", str(count), "-W", "1", target], universal_newlines=True)
+        times = [float(line.split("time=")[1].split(" ms")[0])
+                 for line in output.split("\n") if "time=" in line]
+        if times:
+            avg = sum(times) / len(times)
+            jitter = max(times) - min(times)
+            return avg, jitter
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] Ping failed: {e.output}")
+    return None, None
 
 # === Packet Handler ===
 def analyze_packet(pkt):
@@ -53,48 +58,11 @@ def analyze_packet(pkt):
     ip_layer = pkt[IP]
     src = ip_layer.src
     dst = ip_layer.dst
-    stats["bytes_total"] += len(pkt)
     stats["packet_count"] += 1
-    # track only devices with local ip
+
     for ip in [src, dst]:
         if ip.startswith("192.168.178."):
             stats["active_devices"].add(ip)
-
-    now = time.time()
-    flow_key = (src, dst)
-
-    # Jitter estimation
-    if flow_key in last_arrival_times:
-        delta = now - last_arrival_times[flow_key]
-        stats["jitter_values"].append(delta)
-    last_arrival_times[flow_key] = now
-
-    # TCP-specific analysis
-    if pkt.haslayer(TCP):
-        tcp_layer = pkt[TCP]
-        seq = tcp_layer.seq
-        ack = tcp_layer.ack
-        flags = tcp_layer.flags
-        sport = tcp_layer.sport
-        dport = tcp_layer.dport
-        flow = (src, dst, sport, dport)
-
-        # RTT from SYN → SYN-ACK
-        if flags == 'S':
-            syn_times[(src, dst, dport)] = now
-        elif flags == 'SA':
-            key = (dst, src, sport)
-            if key in syn_times:
-                rtt = (now - syn_times.pop(key)) * 1000
-                stats["rtts"].append(rtt)
-
-        # Retransmission and OoO detection
-        if flow in tcp_seq_map:
-            if seq < tcp_seq_map[flow]:
-                stats["out_of_order"] += 1
-            elif seq == tcp_seq_map[flow]:
-                stats["retransmissions"] += 1
-        tcp_seq_map[flow] = seq
 
 # === Send Collected Metrics ===
 def send_metrics():
@@ -105,10 +73,12 @@ def send_metrics():
     now = time.time()
     duration = now - stats["start_time"]
 
-    bandwidth_kbps = (stats["bytes_total"] * 8) / duration / 1000 if duration > 0 else 0
-    avg_rtt = sum(stats["rtts"]) / len(stats["rtts"]) if stats["rtts"] else None
-    jitter = sum(stats["jitter_values"]) / len(stats["jitter_values"]) if stats["jitter_values"] else None
-    loss_percent = (stats["retransmissions"] / stats["packet_count"]) * 100 if stats["packet_count"] else 0
+    # Bandwidth via psutil (real interface counters)
+    net_io = psutil.net_io_counters()
+    bandwidth_kbps = ((net_io.bytes_recv + net_io.bytes_sent) * 8) / duration / 1000 if duration > 0 else 0
+
+    # Latency and jitter via ping
+    ping_avg_latency, jitter = ping_latency_jitter()
 
     payload = {
         "deviceId": device_id,
@@ -119,23 +89,22 @@ def send_metrics():
                 "packetCount": stats["packet_count"],
                 "deviceCount": len(stats["active_devices"]),
                 "activeDevices": list(stats["active_devices"]),
-                "avgRttMs": round(avg_rtt, 2) if avg_rtt else None,
-                "packetLossPercent": round(loss_percent, 2),
-                "outOfOrderCount": stats["out_of_order"],
-                "jitterMs": round(jitter * 1000, 2) if jitter else None
+                "avgRttMs": None,
+                "packetLossPercent": 0.0,
+                "outOfOrderCount": 0,
+                "jitterMs": round(jitter, 2) if jitter is not None else None,
+                "pingLatencyMs": round(ping_avg_latency, 2) if ping_avg_latency is not None else None
             }
         }
     }
+
+    print(f"[MONITOR] Collected metrics: {payload['payload']['networkStatus']}")
 
     if not has_sent_once:
         print("[MONITOR] Skipping first metrics send to avoid inaccurate zero/null values.")
         has_sent_once = True
     else:
-        print("[MONITOR] Preparing to send network metrics...")
-        print(f"[MONITOR] Payload: {payload}")
-
         try:
-            print("[MONITOR] Sending network metrics...")
             response = requests.post(
                 API_ENDPOINT,
                 json=payload,
@@ -156,19 +125,14 @@ def send_metrics():
             if hasattr(e, 'response') and e.response is not None:
                 print(f"Response content: {e.response.text}")
 
-    # Reset stats for the next interval
+    # Reset stats for next interval
     stats.update({
         "start_time": time.time(),
-        "bytes_total": 0,
         "packet_count": 0,
         "active_devices": set(),
-        "rtts": [],
-        "retransmissions": 0,
-        "out_of_order": 0,
-        "jitter_values": []
     })
 
-    # Schedule next run
+    # Schedule next send
     threading.Timer(SEND_INTERVAL, send_metrics).start()
 
 # === Start Monitoring ===
