@@ -64,6 +64,24 @@ def analyze_packet(pkt):
         if ip.startswith("192.168.178."):
             stats["active_devices"].add(ip)
 
+# === Get Max Bandwidth (Kbps) ===
+def get_max_bandwidth_kbps(interface="eth0"):
+    try:
+        output = subprocess.check_output(["ethtool", interface], universal_newlines=True)
+        for line in output.splitlines():
+            if "Speed:" in line:
+                # Example: "Speed: 1000Mb/s"
+                speed_str = line.split("Speed:")[1].strip()
+                if speed_str.endswith("Mb/s"):
+                    mbps = int(speed_str.replace("Mb/s", "").strip())
+                    return mbps * 1000  # Convert to Kbps
+    except Exception as e:
+        print(f"[WARNING] Failed to detect NIC speed: {e}")
+    return 1000000  # Fallback: assume 1 Gbps
+
+
+MAX_BANDWIDTH_KBPS = get_max_bandwidth_kbps("eth0")
+
 # === Send Collected Metrics ===
 def send_metrics():
     global stats, has_sent_once
@@ -86,6 +104,7 @@ def send_metrics():
         "payload": {
             "networkStatus": {
                 "bandwidthKbps": round(bandwidth_kbps, 2),
+                "maxBandwidthKbps": MAX_BANDWIDTH_KBPS,
                 "packetCount": stats["packet_count"],
                 "deviceCount": len(stats["active_devices"]),
                 "activeDevices": list(stats["active_devices"]),
