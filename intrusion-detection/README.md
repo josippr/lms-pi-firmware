@@ -15,6 +15,7 @@ A lightweight, rule-based intrusion detection system designed for network monito
 - **Secure alert transmission** using client certificates
 - **Cooldown periods** to prevent alert flooding
 - **Modular architecture** for easy rule expansion
+- **Automatic restart** - Crash-safe execution with automatic recovery
 
 ---
 
@@ -22,12 +23,26 @@ A lightweight, rule-based intrusion detection system designed for network monito
 
 The IDS consists of several core components:
 
-- **[`intrusion.py`](intrusion.py)** - Main entry point
+- **[`intrusion.py`](intrusion.py)** - Main entry point and crash-safe execution wrapper
 - **[`core/capture.py`](core/capture.py)** - Packet capture using Scapy
 - **[`core/detection.py`](core/detection.py)** - Packet analysis and metadata extraction
 - **[`core/rules.py`](core/rules.py)** - Rule engine with threat detection logic
 - **[`core/sender.py`](core/sender.py)** - Secure alert transmission to remote API
 - **[`config/rules.yaml`](config/rules.yaml)** - Detection rules configuration
+
+---
+
+## Integration with Main Firmware
+
+This IDS module is integrated into the main LMS Pi firmware ([`../app.py`](../app.py)) and runs as a background thread with the following characteristics:
+
+- **5-minute execution cycles** - Runs continuously with 5-minute intervals
+- **Crash-safe operation** - Automatically restarts if the process fails
+- **Multi-threaded execution** - Runs alongside other monitoring services:
+  - Node metrics collection
+  - FritzBox plugin
+  - Network status monitoring
+- **Virtual environment support** - Executed using `./venv/bin/python`
 
 ---
 
@@ -67,7 +82,7 @@ rules:
 ```
 
 ### Environment Variables
-Required environment variables in [`.env`](../.env):
+Required environment variables in [`../.env`](../.env):
 
 ```bash
 # API endpoint for sending alerts
@@ -91,8 +106,13 @@ FLUSH_INTERVAL=10
 sudo python intrusion.py
 ```
 
-### As Part of Main Firmware
-The IDS runs automatically when [`app.py`](../app.py) is executed, managed as a background thread.
+### As Part of Main Firmware (Recommended)
+```bash
+# From project root directory
+python app.py
+```
+
+The IDS will automatically start as part of the main firmware suite and run continuously with automatic restart capabilities.
 
 ---
 
@@ -101,8 +121,23 @@ The IDS runs automatically when [`app.py`](../app.py) is executed, managed as a 
 - Python 3.7+
 - Root privileges (required for packet capture)
 - Network interface access
+- Virtual environment setup (when using main firmware)
 
 ### Python Dependencies
+Install via the project's virtual environment:
+
+```bash
+# Activate virtual environment
+source ../venv/bin/activate
+
+# Install dependencies
+pip install scapy pyyaml requests psutil python-dotenv
+
+# Or install from requirements if available
+pip install -r ../requirements.txt
+```
+
+Required packages:
 - `scapy` - Packet capture and analysis
 - `pyyaml` - Configuration file parsing
 - `requests` - HTTP client for alert transmission
@@ -117,7 +152,7 @@ Alerts are sent as JSON payloads to the configured API endpoint:
 
 ```json
 {
-  "timestamp": "2024-01-15T10:30:00Z",
+  "timestamp": "2025-07-21T10:30:00Z",
   "uid": "device-unique-id",
   "alert": {
     "type": "Port Scan Detection",
@@ -125,7 +160,7 @@ Alerts are sent as JSON payloads to the configured API endpoint:
     "source": "192.168.1.100",
     "ports": [22, 23, 80, 443, 8080],
     "protocols": [6, 17],
-    "timestamp": 1705312200
+    "timestamp": 1721556600
   }
 }
 ```
@@ -138,6 +173,21 @@ Alerts are sent as JSON payloads to the configured API endpoint:
 - **Rate Limiting**: Built-in cooldown periods prevent alert flooding
 - **Local Processing**: All detection logic runs locally to minimize data transmission
 - **Privilege Requirements**: Requires root access for packet capture
+- **Isolated Environment**: Runs in virtual environment for dependency isolation
+
+---
+
+## Monitoring and Logging
+
+When running as part of the main firmware, the IDS provides detailed logging:
+
+```
+[INFO] Running script: ./intrusion-detection/intrusion.py
+[ERROR] Script ./intrusion-detection/intrusion.py failed: <error details>
+[INFO] Waiting for 5 minutes before next run...
+```
+
+Monitor system status through the main application logs.
 
 ---
 
@@ -172,6 +222,14 @@ if rule['type'] == 'custom_detection':
 **Permission Denied**
 ```bash
 sudo python intrusion.py
+# Or when using main firmware, ensure it's run with appropriate privileges
+```
+
+**Module Not Found**
+```bash
+# Ensure virtual environment is set up correctly
+source ../venv/bin/activate
+pip install -r requirements.txt
 ```
 
 **No Network Interface**
@@ -185,6 +243,9 @@ Verify certificate paths in environment variables and ensure proper permissions.
 
 **High CPU Usage**
 Adjust detection thresholds in [`config/rules.yaml`](config/rules.yaml) to reduce processing overhead.
+
+**Script Failing in Main Firmware**
+Check main application logs for specific error details and ensure all dependencies are installed in the virtual environment.
 
 ---
 
