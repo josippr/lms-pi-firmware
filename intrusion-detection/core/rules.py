@@ -3,6 +3,24 @@ import yaml
 from collections import defaultdict
 from core.sender import send_alert
 
+import netifaces
+import socket
+
+def get_local_ips():
+    ips = []
+    hostname = socket.gethostname()
+    try:
+        ips.append(socket.gethostbyname(hostname))
+    except Exception:
+        pass
+    for iface in netifaces.interfaces():
+        addrs = netifaces.ifaddresses(iface)
+        inet = addrs.get(netifaces.AF_INET)
+        if inet:
+            for addr in inet:
+                ips.append(addr['addr'])
+    return set(ips)
+
 class RuleEngine:
     def __init__(self):
         import os
@@ -11,22 +29,26 @@ class RuleEngine:
             self.rules = yaml.safe_load(f)['rules']
         self.history = defaultdict(list)
         self.last_alert_time = defaultdict(lambda: 0)
+        self.local_ips = get_local_ips()  # ✅ Set this here
 
     def evaluate(self, metadata):
         now = time.time()
 
+        src = metadata['src_ip']
+        if src in self.local_ips:
+            return
+
         for rule in self.rules:
             if rule['type'] == 'port_scan':
                 # 6 = TCP, 17 = UDP
-                if metadata.get('protocol') not in (6, 17):  
+                if metadata.get('protocol') not in (6, 17): 
                     continue
 
-                src = metadata['src_ip']
                 dst = metadata['dst_ip']
                 dst_port = metadata.get('dst_port')
-                
+
                 if dst.startswith('127.'):
-                    continue 
+                    continue
 
                 protocol = metadata.get('protocol')
                 key = (dst, dst_port, protocol)
