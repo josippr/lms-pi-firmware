@@ -9,3 +9,9 @@ rules:
     type: dns_tunnel
     min_length: 30
     dot_count: 4
+
+  - name: Nmap scan detection
+    type: nmap_scan
+    threshold: 5
+    time_window: 3
+    alert_cooldown: 5

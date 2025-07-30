@@ -29,18 +29,16 @@ class RuleEngine:
             self.rules = yaml.safe_load(f)['rules']
         self.history = defaultdict(list)
         self.last_alert_time = defaultdict(lambda: 0)
-        self.local_ips = get_local_ips()  # ✅ Set this here
+        self.local_ips = get_local_ips()
 
     def evaluate(self, metadata):
         now = time.time()
-
         src = metadata['src_ip']
         if src in self.local_ips:
             return
 
         for rule in self.rules:
             if rule['type'] == 'port_scan':
-                # 6 = TCP, 17 = UDP
                 if metadata.get('protocol') not in (6, 17): 
                     continue
 
@@ -78,3 +76,35 @@ class RuleEngine:
                         'source': metadata['src_ip'],
                         'timestamp': int(now)
                     })
+
+            if rule['type'] == 'nmap_scan' and metadata.get('protocol') == 6:  # TCP
+                flags = metadata.get('tcp_flags', '')
+                dst_port = metadata.get('dst_port')
+
+                is_suspicious_flag = flags in ['F', 'N', 'X']
+                
+                # If suspicious flag or high-volume SYN connections
+                if is_suspicious_flag:
+                    self.history[src].append(('nmap_flag', now))
+                else:
+                    self.history[src].append((('nmap_tcp', dst_port), now))
+
+                self.history[src] = [(k, t) for k, t in self.history[src] if now - t <= rule['time_window']]
+
+                # Count unique TCP ports probed
+                unique_ports = {k[1] for k, _ in self.history[src] if isinstance(k, tuple) and k[0] == 'nmap_tcp'}
+                scan_events = [k for k, _ in self.history[src] if str(k).startswith('nmap')]
+
+                if len(unique_ports) > rule['threshold'] or len(scan_events) > rule['threshold']:
+                    last_alert = self.last_alert_time.get(f"{src}-nmap", 0)
+                    if now - last_alert > rule.get('alert_cooldown', 30):
+                        send_alert({
+                            'type': rule['name'],
+                            'method': 'Suspicious TCP port probing (possible Nmap)',
+                            'source': src,
+                            'flags': flags,
+                            'event_count': len(scan_events),
+                            'ports': list(unique_ports),
+                            'timestamp': int(now)
+                        })
+                        self.last_alert_time[f"{src}-nmap"] = now
