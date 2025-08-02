@@ -18,7 +18,11 @@ CLIENT_KEY = os.getenv("CLIENT_KEY")
 API_ENDPOINT = os.getenv("API_ENDPOINT")
 CA_CERT = "/etc/ssl/certs/ca-certificates.crt"
 SEND_INTERVAL = 300  # 5 minutes
+SUBNET = "192.168.88."
 has_sent_once = False
+
+ip_id_tracker = {}
+out_of_order_count = 0
 
 # === Read YAML Config ===
 def read_config(path):
@@ -33,25 +37,36 @@ def read_config(path):
 stats = {
     "start_time": time.time(),
     "packet_count": 0,
-    "active_devices": set(),
+    "active_devices": set()
 }
 
 # === Utility: Ping Latency and Jitter ===
-def ping_latency_jitter(target="192.168.178.1", count=10):
+def ping_latency_jitter(target=SUBNET + "1", count=10):
     try:
         output = subprocess.check_output(["ping", "-c", str(count), "-W", "1", target], universal_newlines=True)
         times = [float(line.split("time=")[1].split(" ms")[0])
                  for line in output.split("\n") if "time=" in line]
+        
+        # Extract packet loss from summary line
+        for line in output.split("\n"):
+            if "packet loss" in line:
+                loss_percent = float(line.split('%')[0].split()[-1])
+                break
+        else:
+            loss_percent = 100.0  # fallback if not found
+
         if times:
             avg = sum(times) / len(times)
             jitter = max(times) - min(times)
-            return avg, jitter
+            return avg, jitter, loss_percent
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] Ping failed: {e.output}")
-    return None, None
+    return None, None, 100.0
 
 # === Packet Handler ===
 def analyze_packet(pkt):
+    global out_of_order_count
+
     if not pkt.haslayer(IP):
         return
 
@@ -61,8 +76,16 @@ def analyze_packet(pkt):
     stats["packet_count"] += 1
 
     for ip in [src, dst]:
-        if ip.startswith("192.168.178."):
+        if ip.startswith(SUBNET):
             stats["active_devices"].add(ip)
+
+    # Track out-of-order packets based on IP ID
+    if src.startswith(SUBNET):
+        last_id = ip_id_tracker.get(src)
+        current_id = ip_layer.id
+        if last_id is not None and current_id < last_id:
+            out_of_order_count += 1
+        ip_id_tracker[src] = current_id
 
 # === Get Max Bandwidth (Kbps) ===
 def get_max_bandwidth_kbps(interface="eth0"):
@@ -96,7 +119,7 @@ def send_metrics():
     bandwidth_kbps = ((net_io.bytes_recv + net_io.bytes_sent) * 8) / duration / 1000 if duration > 0 else 0
 
     # Latency and jitter via ping
-    ping_avg_latency, jitter = ping_latency_jitter()
+    ping_avg_latency, jitter, packet_loss = ping_latency_jitter()
 
     payload = {
         "deviceId": device_id,
@@ -108,9 +131,9 @@ def send_metrics():
                 "packetCount": stats["packet_count"],
                 "deviceCount": len(stats["active_devices"]),
                 "activeDevices": list(stats["active_devices"]),
-                "avgRttMs": None,
-                "packetLossPercent": 0.0,
-                "outOfOrderCount": 0,
+                "avgRttMs": round(ping_avg_latency, 2) if ping_avg_latency is not None else None,
+                "packetLossPercent": round(packet_loss, 2),
+                "outOfOrderCount": out_of_order_count,
                 "jitterMs": round(jitter, 2) if jitter is not None else None,
                 "pingLatencyMs": round(ping_avg_latency, 2) if ping_avg_latency is not None else None
             }
@@ -156,6 +179,6 @@ def send_metrics():
 
 # === Start Monitoring ===
 if __name__ == "__main__":
-    print("[MONITOR] Starting network monitoring...")
+    print("[MONITOR] Starting network monitoring for subnet " + SUBNET)
     send_metrics()
     sniff(prn=analyze_packet, store=0, iface="eth0")
