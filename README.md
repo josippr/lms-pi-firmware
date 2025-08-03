@@ -10,6 +10,48 @@ This repository contains the main firmware for the LMS network monitor, designed
 
 ---
 
+```
+lms-pi-firmware/
+├── app.py
+├── README.md
+├── requirements.txt
+├── temp.py
+├── fritzbox-plugin/
+│   ├── fritzbox.py
+│   └── README.md
+├── intrusion-detection/
+│   ├── intrusion.py
+│   ├── README.md
+│   ├── config/
+│   │   └── rules.yaml
+│   └── core/
+│       ├── capture.py
+│       ├── detection.py
+│       ├── rules.py
+│       ├── sender.py
+│       └── __pycache__/
+├── network-analysis/
+│   └── networkAnalysis.py
+├── network-scanner/
+│   ├── README.md
+│   ├── requirements.txt
+│   └── scanner.py
+├── network-speedtest/
+│   ├── README.md
+│   ├── requirements.txt
+│   └── speedtest.py
+├── network-status/
+│   └── network-status.py
+├── node-metrics/
+│   └── send_metrics.py
+├── test/
+│   ├── mirrored_traffic_logger.py
+│   └── traffic-faker.py
+└── utils/
+    ├── device_signatures.py
+    └── load_env.py
+```
+
 ## Features
 
 - **Network Scanning:**  
