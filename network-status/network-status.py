@@ -24,6 +24,9 @@ has_sent_once = False
 ip_id_tracker = {}
 out_of_order_count = 0
 
+last_bytes_sent = 0
+last_bytes_recv = 0
+
 # === Read YAML Config ===
 def read_config(path):
     try:
@@ -107,7 +110,7 @@ MAX_BANDWIDTH_KBPS = get_max_bandwidth_kbps("eth0")
 
 # === Send Collected Metrics ===
 def send_metrics():
-    global stats, has_sent_once
+    global stats, has_sent_once, last_bytes_sent, last_bytes_recv, out_of_order_count
 
     config = read_config(CONFIG_FILE)
     device_id = config.get("UID", "unknown")
@@ -116,7 +119,11 @@ def send_metrics():
 
     # Bandwidth via psutil (real interface counters)
     net_io = psutil.net_io_counters()
-    bandwidth_kbps = ((net_io.bytes_recv + net_io.bytes_sent) * 8) / duration / 1000 if duration > 0 else 0
+    bytes_sent = net_io.bytes_sent - last_bytes_sent
+    bytes_recv = net_io.bytes_recv - last_bytes_recv
+    bandwidth_kbps = ((bytes_recv + bytes_sent) * 8) / duration / 1000 if duration > 0 else 0
+    last_bytes_sent = net_io.bytes_sent
+    last_bytes_recv = net_io.bytes_recv
 
     # Latency and jitter via ping
     ping_avg_latency, jitter, packet_loss = ping_latency_jitter()
@@ -173,6 +180,12 @@ def send_metrics():
         "packet_count": 0,
         "active_devices": set(),
     })
+
+    # reset out-of-order count
+    out_of_order_count = 0
+
+    # Reset IP ID tracker
+    ip_id_tracker = {}
 
     # Schedule next send
     threading.Timer(SEND_INTERVAL, send_metrics).start()
