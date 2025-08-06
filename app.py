@@ -5,7 +5,7 @@ import time
 # import scripts
 SCRIPTS = {
     # "network-scanner": "/network-scanner/scanner.py",
-    # "network-speedtest": "/network-speedtest/speedtest.py",
+    "network-speedtest": "./network-speedtest/networkSpeedtest.py",
     "node-metrics": "./node-metrics/send_metrics.py",
     "intrusion-detection": "./intrusion-detection/intrusion.py",
     "fritzbox-plugin": "./fritzbox-plugin/fritzbox.py",
@@ -36,7 +36,7 @@ def main():
     # TODO: t2, t3 will be enabled when APIs are ready
     # run scripts
     # t2 = run_script(SCRIPTS["network-scanner"])
-    # t3 = run_script(SCRIPTS["network-speedtest"])
+    t3 = run_script(SCRIPTS["network-speedtest"])
     t4 = run_script(SCRIPTS["node-metrics"])
     t5 = run_script(SCRIPTS["network-analysis"])
     t6 = run_script(SCRIPTS["intrusion-detection"])
