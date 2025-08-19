@@ -18,7 +18,7 @@ CLIENT_KEY = os.getenv("CLIENT_KEY")
 API_ENDPOINT = os.getenv("API_ENDPOINT")
 CA_CERT = "/etc/ssl/certs/ca-certificates.crt"
 SEND_INTERVAL = 300  # 5 minutes
-SUBNET = "192.168.88."
+SUBNET = "192.168.178."
 has_sent_once = False
 
 ip_id_tracker = {}
