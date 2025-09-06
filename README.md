@@ -1,5 +1,7 @@
 # LMS Pi Firmware
 
+This project is embedded component of larger Network Monitoring System developed as Masters thesis @ Zagreb University of Applied Sciences. For more information, visit central repository.
+
 A modular Python firmware for Raspberry Pi-based network monitoring and telemetry nodes.
 
 ---
